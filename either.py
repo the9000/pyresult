@@ -24,6 +24,9 @@ Wrap exception-based APIs into Right / Wrong:
 """
 
 
+import functools
+
+
 class _Right(object):
     """Base for 'sucessful' results"""
     __slots__ = ['__payload']
@@ -45,8 +48,10 @@ class _Right(object):
         return 1
 
     def and_then(self, func, *args, **kwargs):
-        """Some(a) -> func(a)"""
-        return func(*(args + (self.value,)), **kwargs)
+        """Some(a)  -> Some(func(a))"""
+        if args or kwargs:
+            func = functools.partial(func, *args, **kwargs)
+        return self.__class__(func(self.__payload))
 
     __rshift__ = and_then  # reminiscent of ">>="
 
@@ -54,13 +59,7 @@ class _Right(object):
         return self  # 'else' did not happen.
 
     __xor__ = or_else
-
-    def map(self, func):
-        """Some(a)  -> Some(func(a))"""
-        return self.__class__(func(self.value))
-
-    __mod__ = map  # % somehow reminiscent of "<$>"
-
+    
     def __repr__(self):
         return u'%s(%r)' % (self.__class__.__name__, self.value)
 
@@ -81,12 +80,6 @@ class Option(object):
 
         __rshift__ = and_then  # reminiscent of ">>="
 
-        def map(self, func):
-            """Ignore any attempts to process further."""
-            return self
-
-        __mod__ = map  
-
         def __repr__(self):
             return self.__class__.__name__
 
@@ -103,6 +96,20 @@ class Option(object):
     def of_true(cls, value):
         """If value is truthy, then Some, else Nothing."""
         return cls.Nothing if not value else cls.Some(value)
+
+    @classmethod
+    def first(cls, seq):
+        """Utility: get the first element of the sequence if it exists, else Nothing"""
+        for x in seq:
+            return cls.Some(x)
+        return cls.Nothing
+
+    
+def lift(func, *args, **kwargs):
+    def lifted(wrapped_value):
+        return wrapped_value.and_then(func, *args, **kwargs)
+    lifted.__name__ += ('-' + func.__name__)
+    return lifted
 
 
 Some = Option.Some
@@ -136,22 +143,19 @@ class Either(object):
             """Wrong(...) is always falsy."""
             return 0
 
-        def and_then(self, func):
+        def and_then(self, func, *args, **kwargs):
             return self  # 'else' did not happen.
 
         __rshift__ = and_then  # reminiscent of ">>="
 
-        def or_else(self, func):
-            """Wrong(a) -> func(a)"""
-            return func(self.error)
+        # TODO: unify implentation with _Right.and_then.
+        def or_else(self, func, *args, **kwargs):
+            """Wrong(a)  -> Wrong(func(a))"""
+            if args or kwargs:
+                func = functools.partial(func, *args, **kwargs)
+                return self.__class__(func(self.__payload))
 
         __xor__ = or_else
-
-        def map(self, func):
-            """Some(a)  -> Some(func(a))"""
-            return self.__class__(func(self.value))
-
-        __mod__ = map  # % is somehow reminiscent of "<$>"
 
         def __repr__(self):
             return u'%s(%r)' % (self.__class__.__name__, self.error)
