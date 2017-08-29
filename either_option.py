@@ -40,22 +40,26 @@ import functools
 
 def _make_right(cls):
     # A decorator that adds "that's-right-oriented" methods to a class.
-    
+
     def error(self):
         # Help stacktraces a bit.
-        raise ValueError('No .error in %r' % self)
-    
+        raise AttributeError('No .error in %r' % self)
+
+    def __eq__(self, other):
+        return (self.__class__ is other.__class__ and
+                self.value == other.value)
+
     def __len__(self):  # Use for len()
         """Returns 1, for %s is always truthy."""
         return 1
 
-    def and_then(self, func, *args, **kwargs):
+    def bind(self, func, *args, **kwargs):
         if args or kwargs:
             func = functools.partial(func, *args, **kwargs)
-        return self.__class__(func(self.value))
+        return func(self.value)
 
-    def or_else(self, func, *args, **kwargs):
-        return self  # 'else' cannot happen since we're Right.
+    def and_then(self, func, *args, **kwargs):
+        return self.__class__(self.bind(func, *args, **kwargs))
 
     def __repr__(self):
         return u'%s(%r)' % (self.__class__.__name__, self.value)
@@ -63,9 +67,10 @@ def _make_right(cls):
     __len__.__doc__ = __len__.__doc__ % cls.__name__
 
     cls.error = property(error)
+    cls.__eq__ = __eq__
     cls.__len__ = __len__
-    cls.and_then =  cls.__and__ = and_then 
-    cls.or_else =  cls.__or__ = or_else
+    cls.bind = cls.__rshift__ = bind
+    cls.and_then =  cls.__and__ = and_then
     cls.__repr__ = __repr__
     return cls
 
@@ -77,13 +82,13 @@ def _make_left(cls):
 
     len_doc =  """Returns 0, for %s is always falsy.""" % cls.__name__
     __len__.__doc__ = len_doc
-    
-    def and_then(self, func, *args, **kwargs):
+
+    def return_self(self, func, *args, **kwargs):
         """Ignore any attempts to process further."""
         return self
 
-    cls.__len__ = __len__ 
-    cls.and_then =  cls.__and__ = and_then
+    cls.__len__ = __len__
+    cls.and_then =  cls.__and__ = cls.bind = cls.__rshift__ = return_self
     # NOTE: no or_else.
     return cls
 
@@ -93,7 +98,7 @@ class Option(object):
 
     @_make_right
     class Some(object):
-        """Represent a 'contentful' variant of Option. 
+        """Represent a 'contentful' variant of Option.
 
         It's truthy, has .value, .and_then() and .bind() proceed.
         """
@@ -113,7 +118,7 @@ class Option(object):
         It's falsy, han ne .value, .and_then() and .bind()
         return immediately."""
         __slots__ = ()  # Allow no attributes.
-        
+
         def __repr__(self):
             return self.__class__.__name__
 
@@ -122,23 +127,53 @@ class Option(object):
     Nothing = Nothing()
 
     @classmethod
-    def of(cls, value):
-        """If value is None, then Some, else Nothing."""
-        return cls.Nothing if value is None else cls.Some(value)
+    # Ergonomics of partial application if trumped by default arg convenience.
+    def of(cls, value, predicate=None):
+        """If predicate(value), then Some, else Nothing. 
 
-    @classmethod
-    def of_true(cls, value):
-        """If value is truthy, then Some, else Nothing."""
-        return cls.Nothing if not value else cls.Some(value)
+        Default predicate is `is not None`. Pass `bool` for truth chacking.
+        """
+        if predicate is None:
+            predicate = _is_not_none
+        return cls.Some(value) if predicate(value) else cls.Nothing  
 
+    @classmethod  # TODO: factor out;
+    # Ergonomics of partial application if trumped by arg order matching .of().
+    def map_of(cls, seq, predicate):
+        """Lazily map .of() over seq."""
+        return (cls.of(x, predicate) for x in seq)
+    
     @classmethod
     def first(cls, seq):
-        """Utility: get the first element of the sequence if it exists, else Nothing"""
+        """Utility: get the first element of the sequence if it's non-empty, else Nothing"""
         for x in seq:
             return cls.Some(x)
         return cls.Nothing
-
     
+    @classmethod
+    def sequence(cls, seq):  # NOTE: After Haskell and Scalaz.
+        """Returns unpacked values of seq if all are Some, else Nothing.
+
+        If each element of seq = [Some(x),...] is Some, return Some([x,..]).
+        If any of the elements of seq are Nothing, return Nothing,
+
+        The evaluation is short-circuited: seq is evaluated until the first Nothing.
+        Otherwie seq has to be completely evaluated to return a Some.
+        """
+        collected = []
+        for x in seq:
+            if x is cls.Nothing:
+                return Nothing
+            else:
+                collected.append(x.value)
+        return Some(collected)
+
+    @classmethod
+    def pack(cls, seq):
+        """Remove all Nothings from the seq, .sequence the rest."""
+        return cls.sequence(filter(_is_not_nothing, seq))
+
+        
 def lift(func, *args, **kwargs):
     def lifted(wrapped_value):
         return wrapped_value.and_then(func, *args, **kwargs)
@@ -150,12 +185,20 @@ Some = Option.Some
 Nothing = Option.Nothing
 
 
+def _is_not_none(value):
+    return value is not None  # To avoid writin a lambda in Option.of().
+
+def _is_not_nothing(value):
+    return value is not Nothing
+
+# TODO Move to a separate file.
+
 class Either(object):
     """Home of Right and Wrong, and helper methods."""
 
     @_make_right
     class Right(object):
-        """The "that's right" variant of Option. 
+        """The "that's right" variant of Option.
 
         It's truthy, has .value, .and_then() and .bind() proceed.
         """
@@ -167,6 +210,12 @@ class Either(object):
         @property
         def value(self):
             return self.__payload
+
+        def or_else(self, func, *args, **kwargs):
+            return self  # 'else' cannot happen since we're Right.
+
+        __or__ = or_else
+
 
     @_make_left
     class Wrong(object):
@@ -192,9 +241,9 @@ class Either(object):
         def and_then(self, func, *args, **kwargs):
             return self  # 'else' did not happen.
 
-        __rshift__ = and_then  # reminiscent of ">>="
+        __and__ = bind = __rshift__ = and_then
 
-        # TODO: unify implentation with _Right.and_then.
+        # TODO: unify implentation with Some.and_then.
         def or_else(self, func, *args, **kwargs):
             """Wrong(a)  -> Wrong(func(a))"""
             if args or kwargs:
@@ -203,12 +252,16 @@ class Either(object):
 
         __or__ = or_else
 
+        def __eq__(self, other):
+            return (self.__class__ is other.__class__ and
+                    self.error == other.error)
+
         def __repr__(self):
             return u'%s(%r)' % (self.__class__.__name__, self.error)
-        
+
         def inverse(self):
             return Either.Right(self.error)
-        
+
     @classmethod
     def of(cls, value, default):
         """If value is None, then Some, else Nothing."""
@@ -227,20 +280,26 @@ class Either(object):
             except exceptions as ex:
                 return cls.Wrong(ex)
         return either_wrapped
+    
+    @classmethod
+    def collect(cls, seq):
+        """Returns a seq of Right values unpacked, or Wrong value unpacked.
+
+        If each element of seq = [Right(x),...] is Right, return Right([x,..]).
+        If some of the elements of [...Wrong(y),..] are Wrong, return
+        Wrong([y,...]) for all Wrong elements only.
+
+        >>> Either.collect([Right('hand'), Right('foot)]) == Right(['hand', 'foot'])
+        >>> Either.collect([Right('hand'), Wrong('move')]) == Wrong(['move'])
+        """
+        errors = [x.error for x in seq if not x]
+        if errors:
+            return Wrong(errors)
+        return Right([x.value for x in seq])
 
 
 Right = Either.Right
 Wrong = Either.Wrong
-
-
-def collect_values(seq):
-    """Returns a list of values for each Right or Some element in seq."""
-    return [x.value for x in seq if x]
-
-
-def collect_errors(seq):
-    """Returns a list of errors for each Wrong element in seq."""
-    return [x.error for x in seq if not x]
 
 
 __all__ = ['Either', 'Right', 'Wrong', 'Option', 'Some', 'Nothing']

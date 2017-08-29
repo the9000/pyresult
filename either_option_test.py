@@ -28,18 +28,24 @@ class TestOptionNothing(object):
     def test_option_of_none_is_nothing(self):
         assert EO.Option.of(None) is EO.Nothing
 
-    def test_option_of_true_is_nothing_for_false(self):
-        assert EO.Option.of_true(False) is EO.Nothing
-
-    def test_option_of_true_is_same_for_falsy_inputs(self):
-        results = [(x, EO.Option.of_true(x))
-                   for x in FALSY_OBJECTS + (None,)]
-        wrong = filter(lambda (x, result): result is not EO.Nothing, results)
-        assert not wrong
+    def test_option_of_predicate_is_nothing_for_false_predicate(self):
+        assert EO.Option.of('1', str.isalpha) is EO.Nothing
 
     def test_nothing_is_singleton(self):
         # Weak but still useful for sanity check and stating the intent.
-        EO.Option.of(None) is EO.Option.of_true(False)
+        EO.Option.of(None) is EO.Option.of(False, bool)
+
+    def test_bind_ignores_arguments_returns_self(self):
+        assert EO.Nothing.bind(str, foo='bar') is EO.Nothing
+
+    def test_and_then_ignores_arguments_returns_self(self):
+        assert EO.Nothing.and_then(str, foo='bar') is EO.Nothing
+
+    def test_and_bind_return_self(self):
+        def boom(x):
+            raise Exception(x)
+        assert (EO.Nothing & boom) is EO.Nothing
+        assert (EO.Nothing >> boom) is EO.Nothing
 
 
 class TestOptionSome(object):
@@ -88,20 +94,32 @@ class TestOptionSome(object):
         assert (EO.Some(u'\xe9').and_then(unicode.encode, encoding='utf-8') ==
                 EO.Some('\xc3\xa9'))
 
+    def test_bind_does_not_wrap(self):
+        # In a statically checked language, a type system would check that.
+        assert EO.Some(1).bind(str) == '1'
+
+    def test_bind_accepts_arguments(self):
+        def foo(x, value, transf):
+            return EO.Some(transf(x + value))
+        assert EO.Some(1).bind(foo, 2, transf=str) == EO.Some('3')
+
+
+class TestEitherRight(object):
+
     def test_or_else_returns_self(self):
-        s = EO.Some(1)
+        s = EO.Right(1)
         assert s.or_else(str) is s
 
     def test_or_else_ignores_function(self):
-        s = EO.Some(1)
+        s = EO.Right(1)
         def boom(x):
             raise Exception(x)
         assert s.or_else(boom) is s
 
-    def test_or_else_ignores_function(self):
-        s = EO.Some(1)
+    def test_or_else_ignores_function_params(self):
+        s = EO.Right(1)
         assert s.or_else(str, 1, foo='bar') is s
 
     def test_or_else_equals_or(self):
-        s = EO.Some(1)
+        s = EO.Right(1)
         assert s.or_else(str) is (s | str)
