@@ -44,7 +44,7 @@ class Option(object):
         Default predicate is `is not None`. Pass `bool` for truth chacking.
         """
         if predicate is None:
-            predicate = _is_not_none
+            predicate = _impl._is_not_none
         return cls.Some(value) if predicate(value) else cls.Nothing  
 
     @classmethod 
@@ -84,10 +84,6 @@ class Option(object):
     def pack(cls, seq):
         """Remove all Nothings from the seq, .sequence the rest."""
         return cls.sequence(filter(_is_not_nothing, seq))
-
-
-def _is_not_none(value):
-    return value is not None  # To avoid writing a lambda in Option.of().
 
 
 def _is_not_nothing(value):

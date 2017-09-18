@@ -56,3 +56,8 @@ def _make_left(cls):
     cls.and_then =  cls.__and__ = cls.bind = cls.__rshift__ = return_self
     # NOTE: no or_else.
     return cls
+
+
+def _is_not_none(value):
+    """The default .of() predicate."""
+    return value is not None

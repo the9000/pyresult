@@ -73,14 +73,14 @@ class Either(object):
             return Either.Right(self.error)
 
     @classmethod
-    def of(cls, value, default):
-        """If value is None, then Some, else Nothing."""
-        return cls.Wrong(default) if value is None else cls.Right(value)
+    def of(cls, value, otherwise, predicate=None):
+        """If predicate(value), then Right(value), else Wrong(otherwise).
 
-    @classmethod
-    def of_true(cls, value, default):
-        """If value is truthy, then Some, else Nothing."""
-        return cls.Wrong(default) if not value else cls.Right(value)
+        Default predicate is `is not None`. Pass `bool` for truth chacking.
+        """
+        if predicate is None:
+            predicate = _impl._is_not_none
+        return cls.Right(value) if predicate(value) else cls.Wrong(otherwise)
 
     @classmethod
     def wrapping(cls, exceptions, func):
