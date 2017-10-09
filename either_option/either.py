@@ -26,6 +26,9 @@ class Either(object):
 
         __or__ = or_else
 
+        def inverse(self):
+            return Either.Wrong(self.value)
+
 
     @_impl._make_left
     class Wrong(object):
@@ -55,10 +58,8 @@ class Either(object):
 
         # TODO: unify implentation with Some.and_then.
         def or_else(self, func, *args, **kwargs):
-            """Wrong(a)  -> Wrong(func(a))"""
-            if args or kwargs:
-                func = functools.partial(func, *args, **kwargs)
-            return self.__class__(func(self.__payload))
+            """Wrong(a)  -> Right(func(a))"""
+            return self.inverse().and_then(func, *args, **kwargs)
 
         __or__ = or_else
 

@@ -17,7 +17,7 @@ class Option(object):
         def __init__(self, value):
             self.__payload = value
 
-        @property
+        @property  # Cannot factor it out because __payload access.
         def value(self):
             return self.__payload
 
@@ -32,6 +32,7 @@ class Option(object):
         def __repr__(self):
             return self.__class__.__name__
 
+
     # Replace the nested class with a single instance,
     # removeing any possibility to create more.
     Nothing = Nothing()
@@ -39,29 +40,29 @@ class Option(object):
     @classmethod
     # Ergonomics of partial application if trumped by default arg convenience.
     def of(cls, value, predicate=None):
-        """If predicate(value), then Some, else Nothing. 
+        """If predicate(value), then Some, else Nothing.
 
         Default predicate is `is not None`. Pass `bool` for truth chacking.
         """
         if predicate is None:
             predicate = _impl._is_not_none
-        return cls.Some(value) if predicate(value) else cls.Nothing  
+        return cls.Some(value) if predicate(value) else cls.Nothing
 
-    @classmethod 
+    @classmethod
     # Ergonomics of partial application if trumped by arg order matching .of().
     # Sad that it's the reverse of map()'s.
     # TODO: consider removing.
     def map_of(cls, seq, predicate):
         """Lazily map .of() over seq."""
         return (cls.of(x, predicate) for x in seq)
-    
+
     @classmethod
     def first(cls, seq):
         """Utility: get the first element of the sequence if it's non-empty, else Nothing"""
         for x in seq:
             return cls.Some(x)
         return cls.Nothing
-    
+
     @classmethod
     def sequence(cls, seq):  # NOTE: After Haskell and Scalaz.
         """Returns unpacked values of seq if all are Some, else Nothing.

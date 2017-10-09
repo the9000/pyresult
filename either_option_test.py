@@ -88,11 +88,14 @@ class TestOptionSome(object):
         assert EO.Some([123]).and_then(str) == EO.Some([123]) & str
 
     def test_and_then_passes_args(self):
-        assert EO.Some([1, 2]).and_then(map, str) == EO.Some(['1', '2'])
+        assert EO.Some('1f').and_then(int, 16) == EO.Some(31)
 
     def test_and_then_passes_kwargs(self):
         assert (EO.Some(u'\xe9').and_then(unicode.encode, encoding='utf-8') ==
                 EO.Some('\xc3\xa9'))
+
+    def test_rbind_passes_self_last(self):
+        assert EO.Some([1, 2]).rbind(map, str) == ['1', '2']
 
     def test_bind_does_not_wrap(self):
         # In a statically checked language, a type system would check that.
