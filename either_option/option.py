@@ -49,14 +49,6 @@ class Option(object):
         return cls.Some(value) if predicate(value) else cls.Nothing
 
     @classmethod
-    # Ergonomics of partial application if trumped by arg order matching .of().
-    # Sad that it's the reverse of map()'s.
-    # TODO: consider removing.
-    def map_of(cls, seq, predicate):
-        """Lazily map .of() over seq."""
-        return (cls.of(x, predicate) for x in seq)
-
-    @classmethod
     def first(cls, seq):
         """Utility: get the first element of the sequence if it's non-empty, else Nothing"""
         for x in seq:

@@ -91,10 +91,10 @@ class Either(object):
             except exceptions as ex:
                 return cls.Wrong(ex)
         return either_wrapped
-    
+
     @classmethod
     def collect(cls, seq):
-        """Returns a seq of Right values unpacked, or Wrong value unpacked.
+        """Returns a seq of Right values unpacked, or Wrong values unpacked.
 
         If each element of seq = [Right(x),...] is Right, return Right([x,..]).
         If some of the elements of [...Wrong(y),..] are Wrong, return
@@ -108,7 +108,7 @@ class Either(object):
             return Wrong(errors)
         return Right([x.value for x in seq])
 
-    
+
 Right = Either.Right
 Wrong = Either.Wrong
 

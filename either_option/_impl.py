@@ -37,6 +37,11 @@ def _make_right(cls):
         """Returns self.value, ignores other_value."""
         return self.value
 
+    def has_value(self):
+        return True
+
+    cls.has_value = property(has_value)
+
     def __repr__(self):
         return u'%s(%r)' % (self.__class__.__name__, self.value)
 
@@ -46,6 +51,7 @@ def _make_right(cls):
     # Lifted utilities.
     cls.__eq__ = __eq__
     cls.__len__ = __len__
+
     # Positive.
     cls.bind = cls.__rshift__ = bind
     cls.rbind = rbind
@@ -53,6 +59,13 @@ def _make_right(cls):
     # Negative.
     cls.or_value = or_value
     cls.error = property(error)
+
+    # Iteration / "fmap"
+    def __iter__(self):
+        return iter((self.value,))
+
+    cls.__iter__ = __iter__
+
     return cls
 
 
@@ -74,6 +87,16 @@ def _make_left(cls):
 
     cls.or_value = or_value
 
+    def has_value(self):
+        return False
+
+    cls.has_value = property(has_value)
+
+    def __iter__(self):
+        return _EMPTY_ITER
+
+    cls.__iter__ = __iter__
+
     return cls
 
 
@@ -85,3 +108,5 @@ def _is_not_none(value):
 def _return_self(self, func, *args, **kwargs):
     """Ignore any attempts to process further."""
     return self
+
+_EMPTY_ITER = iter(())  # Always empty, no state, can be reused.
