@@ -4,6 +4,8 @@ Tests for either_option.
 Intended to be run with py.test, thus bare asserts.
 """
 
+import itertools
+
 import pytest
 
 import either_option as EO
@@ -46,6 +48,9 @@ class TestOptionNothing(object):
             raise Exception(x)
         assert (EO.Nothing & boom) is EO.Nothing
         assert (EO.Nothing >> boom) is EO.Nothing
+
+    def test_nothing_repr_is_nothing(self):
+        assert repr(EO.Nothing) == 'Nothing'
 
 
 class TestOptionSome(object):
@@ -105,6 +110,42 @@ class TestOptionSome(object):
         def foo(x, value, transf):
             return EO.Some(transf(x + value))
         assert EO.Some(1).bind(foo, 2, transf=str) == EO.Some('3')
+
+
+class FailingSeq(object):
+    # Fails at any any attempt of iterating over it.
+    def __iter__(self):
+        assert False, 'Attempt to iterate'
+
+    next = __iter__
+
+
+class TestOptionClass(object):
+
+    def test_first_of_non_empty_sequence_is_some(self):
+        assert EO.Option.first([1, 2, 3]) == EO.Some(1)
+
+    def test_first_of_empty_sequence_is_nothing(self):
+        assert EO.Option.first([]) == EO.Nothing
+
+    def test_first_is_lazy(self):
+        only_once_seq = itertools.chain([1], FailingSeq())
+        assert EO.Option.first(only_once_seq) == EO.Some(1)
+
+
+class TestIteration(object):
+
+    def test_nothing_does_empty_loop(self):
+        assert list(EO.Nothing) == []
+
+    def test_either_does_empty_loop_by_wrong(self):
+        assert list(EO.Wrong("joe")) == []
+
+    def test_some_does_one_loop(self):
+        assert list(EO.Some('thing')) == ['thing']
+
+    def test_either_does_loop_by_right(self):
+        assert list(EO.Right("joe")) == ["joe"]
 
 
 class TestEitherRight(object):
