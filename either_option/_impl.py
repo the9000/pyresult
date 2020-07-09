@@ -15,25 +15,25 @@ def _make_right(cls):
                 self.value == other.value)
 
     def __len__(self):  # Use for len()
-        """Returns 1, for %s is always truthy."""
-        return 1
+        """Lifted into %s: returns len() of the value"""
+        return len(self.value)
 
     def rbind(self, func, *args, **kwargs):
-        # call callables, assume strings method names.
-        if not callable(func):
-            func = getattr(self.value.__class__, func)  # Will crash on wrong method name.
+        # No method names accepted.
         return func(*(args + (self.value,)), **kwargs)
 
-    def bind(self, func, *args, **kwargs):
+    def bind(self, func_or_name, *args, **kwargs):
         # call callables, assume strings method names.
-        if not callable(func):
-            func = getattr(self.value.__class__, func)  # Will crash on wrong method name.
+        if not callable(func_or_name):
+            func = getattr(self.value.__class__, func_or_name)  # Will crash on wrong method name.
+        else:
+            func = func_or_name
         return func(*((self.value,) + args), **kwargs)
 
     def and_then(self, func, *args, **kwargs):
         return self.__class__(self.bind(func, *args, **kwargs))
 
-    def or_value(self, other_value):
+    def value_or(self, other_value):
         """Returns self.value, ignores other_value."""
         return self.value
 
@@ -57,7 +57,7 @@ def _make_right(cls):
     cls.rbind = rbind
     cls.and_then =  cls.__and__ = and_then
     # Negative.
-    cls.or_value = or_value
+    cls.value_or = value_or
     cls.error = property(error)
 
     # Iteration / "fmap"
@@ -71,21 +71,21 @@ def _make_right(cls):
 
 def _make_left(cls):
     # A decorator that adde "what's-left-oriented" methods to a class.
-    def __len__(self):  # Use for len()
-        return 0
+    # def __len__(self):  # Use for len()
+    #     return 0
 
-    len_doc =  """Returns 0, for %s is always falsy.""" % cls.__name__
-    __len__.__doc__ = len_doc
+    # len_doc =  """Returns 0, for %s is always falsy.""" % cls.__name__
+    # __len__.__doc__ = len_doc
 
-    cls.__len__ = __len__
-    cls.and_then =  cls.__and__ = cls.bind = cls.rbind = cls.__rshift__ = _return_self
+    # cls.__len__ = __len__
+    # cls.and_then =  cls.__and__ = cls.bind = cls.rbind = cls.__rshift__ = _return_self
     # NOTE: no or_else / `|`.
 
-    def or_value(self, other_value):
+    def value_or(self, other_value):
         """Returns other_value, because self.value does not exist."""
         return other_value
 
-    cls.or_value = or_value
+    cls.value_or = value_or
 
     def has_value(self):
         return False
@@ -110,3 +110,21 @@ def _return_self(self, func, *args, **kwargs):
     return self
 
 _EMPTY_ITER = iter(())  # Always empty, no state, can be reused.
+
+
+# Lifting of methods.
+# TODO: Lifting of value attributes.
+# Some("foo").lifted.upper() == Some("FOO")
+# Some("foo").lifted[0] == Some("f")
+# Nothing.lifted.anything() == Nothing.
+
+class _Lifted(object):
+    __slots__ = ("__value")
+
+    def __init__(self, rightish):
+        self.__value = rightish
+
+    def __getattr__(self, name):
+        attr = getattr(self.__value)
+        if callable(attr):
+            return lambda *args, **kwargs: self.__value.__class(attr(*args, **kwargs))
